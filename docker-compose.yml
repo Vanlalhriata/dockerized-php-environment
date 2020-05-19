@@ -1,0 +1,92 @@
+version: '3'
+
+networks:
+  laravel:
+
+services:
+
+  # The server serving the laravel application
+  nginx:
+    image: nginx:stable-alpine
+    container_name: nginx
+    ports:
+      # Expose on port 80 so the server is accessed by default without specifying a port
+      - "80:80"
+    volumes:
+      # Expecting the laravel project in the src folder
+      - ./src:/var/www/html
+      # nginx configuration. Sets root as ./src/public following Laravel project structure
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - php
+      - db
+    networks:
+      - laravel
+
+  # The database. The service name (db) should be the database host name in .env
+  db:
+    # Use version to match production
+    image: mysql:5.7.29
+    container_name: db
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3306:3306"
+    volumes:
+      # Persist database in the database folder
+      - ./database:/var/lib/mysql
+    environment:
+      # Match these values in .env
+      MYSQL_DATABASE: tcd
+      MYSQL_USER: tcd
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: secret
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    networks:
+      - laravel
+
+  # Database access and management GUI
+  adminer:
+    image: adminer
+    depends_on:
+      - db
+    ports:
+      - 9090:8080
+    networks:
+      - laravel
+
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: php
+    volumes:
+      - ./src:/var/www/html
+    ports:
+      - "9000:9000"
+    networks:
+      - laravel
+
+  composer:
+    image: composer:latest
+    container_name: composer
+    volumes:
+      - ./src:/var/www/html
+    working_dir: /var/www/html
+    depends_on:
+      - php
+    networks:
+      - laravel
+
+  artisan:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: artisan
+    volumes:
+      - ./src:/var/www/html
+    working_dir: /var/www/html
+    entrypoint: ['php', '/var/www/html/artisan']
+    networks:
+      - laravel
